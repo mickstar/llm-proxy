@@ -1,0 +1,11 @@
+version: "2"
+
+linters:
+  default: standard
+  exclusions:
+    rules:
+      # Test files freely use defer Close / Fprint / Write without checking
+      # errors (handlers and t.Cleanup paths); that noise is not worth guarding.
+      - path: _test\.go
+        linters:
+          - errcheck

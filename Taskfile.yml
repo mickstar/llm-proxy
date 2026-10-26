@@ -1,0 +1,159 @@
+version: '3'
+
+vars:
+  BINARY: llm-proxy
+  PKG: ./cmd/llm-proxy
+
+tasks:
+  default:
+    desc: List available tasks
+    silent: true
+    cmds:
+      - task --list
+
+  build:
+    desc: Build the llm-proxy binary
+    cmds:
+      - go build -o {{.BINARY}} {{.PKG}}
+
+  test:
+    desc: Run the test suite
+    cmds:
+      - go test ./...
+
+  lint:
+    desc: Run golangci-lint (pinned via mise)
+    cmds:
+      - mise exec -- golangci-lint run ./...
+
+  hooks:
+    desc: Install git hooks (pre-commit)
+    cmds:
+      - pre-commit install
+
+  fmt:
+    desc: Format Go sources
+    cmds:
+      - gofmt -w .
+
+  vet:
+    desc: Run go vet
+    cmds:
+      - go vet ./...
+
+  tidy:
+    desc: Tidy go.mod / go.sum
+    cmds:
+      - go mod tidy
+
+  clean:
+    desc: Remove build artifacts and the test cache
+    cmds:
+      - rm -f {{.BINARY}}
+      - go clean -testcache
+
+  reload:
+    desc: Rebuild and restart the running proxy (launchd)
+    cmds:
+      - go build -o "$(go env GOPATH)/bin/{{.BINARY}}" {{.PKG}}
+      - |
+        if ! launchctl print gui/$(id -u)/io.github.mickstar.llm-proxy >/dev/null 2>&1; then
+          echo "io.github.mickstar.llm-proxy is not loaded; run 'task service:install' first" >&2
+          exit 1
+        fi
+        launchctl kickstart -k gui/$(id -u)/io.github.mickstar.llm-proxy
+      - |
+        CFG="$HOME/Library/Application Support/{{.BINARY}}/config.json"
+        ADDR=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["server"]["control_addr"])' "$CFG" 2>/dev/null || echo 127.0.0.1:8788)
+        for i in $(seq 1 50); do
+          if curl -sf "http://$ADDR/api/health" >/dev/null 2>&1; then
+            echo "reloaded: $(curl -s "http://$ADDR/api/health")"
+            exit 0
+          fi
+          sleep 0.2
+        done
+        echo "did not come up on $ADDR; tail of $HOME/Library/Logs/{{.BINARY}}.log:" >&2
+        tail -n 20 "$HOME/Library/Logs/{{.BINARY}}.log" >&2
+        exit 1
+
+  service:install:
+    desc: Install and start the macOS LaunchAgent (starts at login)
+    cmds:
+      - mkdir -p "$HOME/Library/LaunchAgents" "$HOME/Library/Logs" "$(go env GOPATH)/bin"
+      - go build -o "$(go env GOPATH)/bin/{{.BINARY}}" {{.PKG}}
+      - |
+        sed -e "s|__BIN__|$(go env GOPATH)/bin/{{.BINARY}}|" \
+            -e "s|__LOG__|$HOME/Library/Logs/{{.BINARY}}.log|" \
+            deploy/io.github.mickstar.llm-proxy.plist > "$HOME/Library/LaunchAgents/io.github.mickstar.llm-proxy.plist"
+      - launchctl bootout gui/$(id -u)/io.github.mickstar.llm-proxy 2>/dev/null || true
+      - launchctl bootstrap gui/$(id -u) "$HOME/Library/LaunchAgents/io.github.mickstar.llm-proxy.plist"
+      - launchctl kickstart -k gui/$(id -u)/io.github.mickstar.llm-proxy
+      - echo "running as io.github.mickstar.llm-proxy; log at $HOME/Library/Logs/{{.BINARY}}.log"
+
+  service:uninstall:
+    desc: Stop and remove the macOS LaunchAgent
+    cmds:
+      - launchctl bootout gui/$(id -u)/io.github.mickstar.llm-proxy 2>/dev/null || true
+      - rm -f "$HOME/Library/LaunchAgents/io.github.mickstar.llm-proxy.plist"
+      - echo "removed io.github.mickstar.llm-proxy"
+
+  service:status:
+    desc: Show the LaunchAgent's state
+    cmds:
+      - launchctl print gui/$(id -u)/io.github.mickstar.llm-proxy | sed -n '1,25p'
+
+  menubar:build:
+    desc: Build the macOS menu bar and console app bundle
+    cmds:
+      - swift build -c release --package-path menubar
+      - rm -rf "menubar/.build/LLM Proxy.app"
+      - mkdir -p "menubar/.build/LLM Proxy.app/Contents/MacOS" "menubar/.build/LLM Proxy.app/Contents/Resources"
+      - cp menubar/.build/release/llm-proxy-menubar "menubar/.build/LLM Proxy.app/Contents/MacOS/llm-proxy-menubar"
+      - cp menubar/Info.plist "menubar/.build/LLM Proxy.app/Contents/Info.plist"
+      - cp menubar/Resources/AppIcon.icns "menubar/.build/LLM Proxy.app/Contents/Resources/AppIcon.icns"
+
+  menubar:test:
+    desc: Run the menu bar package tests
+    cmds:
+      - swift test --package-path menubar
+
+  menubar:run:
+    desc: Run the app bundle attached to the terminal
+    deps: [menubar:build]
+    cmds:
+      - "\"menubar/.build/LLM Proxy.app/Contents/MacOS/llm-proxy-menubar\""
+
+  menubar:console:
+    desc: Build and open the native console window
+    deps: [menubar:build]
+    cmds:
+      - "\"menubar/.build/LLM Proxy.app/Contents/MacOS/llm-proxy-menubar\" --console"
+
+  menubar:install:
+    desc: Install and start the app bundle (starts at login)
+    deps: [menubar:build]
+    cmds:
+      - mkdir -p "$HOME/Library/LaunchAgents" "$HOME/Library/Logs" "$HOME/Applications"
+      - rm -rf "$HOME/Applications/LLM Proxy.app"
+      - cp -R "menubar/.build/LLM Proxy.app" "$HOME/Applications/"
+      - |
+        sed -e "s|__BIN__|$HOME/Applications/LLM Proxy.app/Contents/MacOS/llm-proxy-menubar|" \
+            -e "s|__LOG__|$HOME/Library/Logs/llm-proxy-menubar.log|" \
+            deploy/io.github.mickstar.llm-proxy-menubar.plist > "$HOME/Library/LaunchAgents/io.github.mickstar.llm-proxy-menubar.plist"
+      - launchctl bootout gui/$(id -u)/io.github.mickstar.llm-proxy-menubar 2>/dev/null || true
+      - launchctl bootstrap gui/$(id -u) "$HOME/Library/LaunchAgents/io.github.mickstar.llm-proxy-menubar.plist"
+      - launchctl kickstart -k gui/$(id -u)/io.github.mickstar.llm-proxy-menubar
+      - echo "menu bar app running as io.github.mickstar.llm-proxy-menubar; log at $HOME/Library/Logs/llm-proxy-menubar.log"
+
+  menubar:uninstall:
+    desc: Stop and remove the app bundle and LaunchAgent
+    cmds:
+      - launchctl bootout gui/$(id -u)/io.github.mickstar.llm-proxy-menubar 2>/dev/null || true
+      - rm -f "$HOME/Library/LaunchAgents/io.github.mickstar.llm-proxy-menubar.plist"
+      - rm -rf "$HOME/Applications/LLM Proxy.app"
+      - echo "removed io.github.mickstar.llm-proxy-menubar"
+
+  menubar:status:
+    desc: Show the menu bar LaunchAgent's state
+    cmds:
+      - launchctl print gui/$(id -u)/io.github.mickstar.llm-proxy-menubar | sed -n '1,25p'

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  LaunchAgent template. `task service:install` fills in __BIN__ and __LOG__ and
+  copies the result to ~/Library/LaunchAgents/.
+
+  RunAtLoad starts the proxy at login; KeepAlive restarts it if it dies. The
+  process is `serve`, so it is headless: running `llm-proxy` afterwards attaches
+  the TUI to it instead of starting a second server.
+-->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>io.github.mickstar.llm-proxy</string>
+
+	<key>ProgramArguments</key>
+	<array>
+		<string>__BIN__</string>
+		<string>serve</string>
+	</array>
+
+	<key>RunAtLoad</key>
+	<true/>
+
+	<key>KeepAlive</key>
+	<true/>
+
+	<key>ThrottleInterval</key>
+	<integer>10</integer>
+
+	<key>StandardOutPath</key>
+	<string>__LOG__</string>
+
+	<key>StandardErrorPath</key>
+	<string>__LOG__</string>
+</dict>
+</plist>

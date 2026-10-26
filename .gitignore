@@ -1,0 +1,18 @@
+# Compiled binaries
+/llm-proxy
+/dist/
+menubar/.build/
+
+# Test artifacts
+*.test
+coverage.out
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Local runtime state: the config can hold a literal upstream credential.
+config.json
+stats.json
+*.log
