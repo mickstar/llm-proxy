@@ -59,7 +59,7 @@ The control API SHALL list every recorded redaction alias with its original valu
 - **THEN** the alias, original value, rule, and count are returned
 
 ### Requirement: Expose the traffic log
-The control API SHALL expose traffic log entries: a list of recent entries, full detail for a single entry by id, and a live server-sent-events stream that pushes each new entry as it is recorded.
+The control API SHALL expose traffic log entries: a list of recent entries, full detail for a single entry by id, and a live server-sent-events stream that pushes each new entry as it is recorded. The list and the stream SHALL carry summary fields only; captured request and response bodies SHALL be served by the detail endpoint alone, so a live frame stays small regardless of body size.
 
 #### Scenario: List recent traffic
 - **WHEN** a client lists traffic entries after several proxied requests
@@ -67,7 +67,7 @@ The control API SHALL expose traffic log entries: a list of recent entries, full
 
 #### Scenario: Stream live traffic
 - **WHEN** a client subscribes to the traffic stream and a new proxied exchange is recorded
-- **THEN** the entry is pushed to the subscriber
+- **THEN** the entry's summary fields are pushed to the subscriber without its captured bodies
 
 ### Requirement: Expose usage metrics
 The control API SHALL expose a metrics snapshot with all-time and per-model token and cost totals, trailing-window throughput, per-minute activity, in-flight requests, the last token-bearing request, any persistence error, and the current halt state.

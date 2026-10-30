@@ -578,9 +578,9 @@ same endpoints.
 | `PUT` / `DELETE /api/redactions/rules/{name}` | Update / delete a redaction rule. |
 | `GET /api/halt` | Halted state, triggering filter, timestamp, and refused count. |
 | `POST /api/resume` | Clear the halted state. |
-| `GET /api/traffic?limit=N` | Recent entries, newest-first. |
+| `GET /api/traffic?limit=N` | Recent entries, newest-first, summary fields only. |
 | `GET /api/traffic/{id}` | One entry including request/response bodies. |
-| `GET /api/traffic/stream` | Server-sent events, one `entry` event per recorded exchange. |
+| `GET /api/traffic/stream` | Server-sent events, one `entry` event per recorded exchange, summary fields only; bodies come from `{id}`. |
 
 Errors are JSON: `{"error": "message"}` with a 4xx/5xx status.
 

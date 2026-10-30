@@ -665,7 +665,10 @@ func TestTrafficStream(t *testing.T) {
 
 	go func() {
 		time.Sleep(150 * time.Millisecond)
-		f.log.Record(&traffic.Entry{Method: http.MethodPost, Path: "/v1/chat/completions", Status: 200})
+		f.log.Record(&traffic.Entry{
+			Method: http.MethodPost, Path: "/v1/chat/completions", Status: 200,
+			RequestBody: "request body", ResponseBody: "response body",
+		})
 	}()
 
 	rd := bufio.NewReader(resp.Body)
@@ -690,6 +693,14 @@ func TestTrafficStream(t *testing.T) {
 	}
 	if e.ID == 0 || e.Path != "/v1/chat/completions" {
 		t.Errorf("streamed entry = %+v", e)
+	}
+	// The stream pushes summary fields only, exactly like the list: bodies would
+	// cost up to 1.25 MiB per frame for clients that never display them.
+	if e.RequestBody != "" || e.ResponseBody != "" || e.RequestTruncated || e.ResponseTruncated {
+		t.Errorf("stream should omit bodies: %+v", e)
+	}
+	if strings.Contains(data, `"request_body"`) || strings.Contains(data, `"response_body"`) {
+		t.Errorf("stream frame carries body fields: %s", data)
 	}
 }
 

@@ -603,17 +603,24 @@ func (s *Server) listTraffic(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	entries := s.log.List(limit)
-	// The list carries summary fields only; bodies come from the detail endpoint.
 	out := make([]traffic.Entry, 0, len(entries))
 	for _, e := range entries {
-		cp := *e
-		cp.RequestBody = ""
-		cp.ResponseBody = ""
-		cp.RequestTruncated = false
-		cp.ResponseTruncated = false
-		out = append(out, cp)
+		out = append(out, summaryEntry(e))
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// summaryEntry returns a copy of e without its captured bodies. Both the list
+// and the live stream carry summary fields only: a streamed frame is a few
+// hundred bytes instead of up to the body caps (1 MiB + 256 KiB), and clients
+// fetch bodies from the detail endpoint only for the entry they inspect.
+func summaryEntry(e *traffic.Entry) traffic.Entry {
+	cp := *e
+	cp.RequestBody = ""
+	cp.ResponseBody = ""
+	cp.RequestTruncated = false
+	cp.ResponseTruncated = false
+	return cp
 }
 
 func (s *Server) getTraffic(w http.ResponseWriter, r *http.Request) {
@@ -649,7 +656,7 @@ func (s *Server) streamTraffic(w http.ResponseWriter, r *http.Request) {
 		case <-r.Context().Done():
 			return
 		case e := <-ch:
-			data, err := json.Marshal(e)
+			data, err := json.Marshal(summaryEntry(e))
 			if err != nil {
 				continue
 			}
